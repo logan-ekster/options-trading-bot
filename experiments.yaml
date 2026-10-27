@@ -1,0 +1,58 @@
+# ─────────────────────────────────────────────────────────────
+#  Experiments for:  python run.py compare
+#  Each one is your config.yaml with ONE thing changed.
+#  "baseline" (your config.yaml as-is) is always tested first.
+#
+#  How to write one:
+#    set:        change any setting, using dots for nesting  (e.g. exits.stop_loss_pct: 30)
+#    disable:    turn bots off for this test                 (e.g. [BUY THE DIP])
+#    worker_set: change a per-bot setting for EVERY bot      (e.g. daily_goal: 100)
+#  Add a # in front of an experiment's lines to skip it.
+#  Run just some:  python run.py compare --only "no buy the dip,60 min trades"
+# ─────────────────────────────────────────────────────────────
+experiments:
+  - name: no buy the dip
+    disable: [BUY THE DIP]
+
+  - name: 60 min trades
+    set: { exits.max_minutes_in_trade: 60 }
+
+  - name: 30 min trades
+    set: { exits.max_minutes_in_trade: 30 }
+
+  - name: 2 trades open at once
+    set: { risk.max_open_trades_total: 2 }
+
+  - name: no new trades after 2pm
+    set: { risk.trade_window_end: "14:00" }
+
+  - name: wider stop (35%)
+    set: { exits.stop_loss_pct: 35 }
+
+  - name: tighter trail (give back 7%)
+    set: { exits.trail_giveback_pct: 7 }
+
+  - name: at-the-money strikes
+    set: { contracts.strike_offset: 0 }
+
+  - name: only QQQ OG + QQQ TREND
+    disable: [SPY, IWM, BUY THE DIP]
+
+  # ── v2 (video 2) comparisons ──
+  - name: old single signals (v1)
+    per_worker:
+      QQQ OG: { strategy: ema_cross }
+      SPY:    { strategy: vwap_cross }
+      IWM:    { strategy: ema_cross }
+
+  - name: opening range breakout only
+    per_worker:
+      QQQ OG: { strategy: orb }
+      SPY:    { strategy: orb }
+      IWM:    { strategy: orb }
+
+  - name: no team profit target
+    set: { risk.daily_profit_target_total: 0 }
+
+  - name: team target $150
+    set: { risk.daily_profit_target_total: 150 }

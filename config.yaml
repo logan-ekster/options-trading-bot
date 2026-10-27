@@ -1,0 +1,97 @@
+# ─────────────────────────────────────────────────────────────
+#  Options Bot City - settings  (v2: matches the 2nd video's rules)
+#  Edit this file to change how the bots behave.
+#  Lines starting with # are notes and are ignored.
+# ─────────────────────────────────────────────────────────────
+
+# "paper" = fake money (Alpaca paper account). ALWAYS start here.
+# "live"  = real money. Also requires running with --live and typing a confirmation.
+mode: paper
+
+# ── Account-wide safety limits (sized for a $1,000 paper account) ──
+risk:
+  max_daily_loss_total: 100      # $ - if ALL bots together are down this much today (incl. open trades), everything sells and stops
+  daily_profit_target_total: 100 # $ - "once you get up to a set amount, it stops trading for the day". 0 = off
+  max_dollars_per_trade: 300     # $ - most a single trade can spend on contracts
+  max_contracts_per_trade: 1     # hard cap no matter what
+  max_open_trades_total: 1       # how many bots can be in a trade at the same time
+  flatten_time: "15:45"          # ET - sell anything still open at this time
+  trade_window_start: "09:45"    # ET - no new trades before this (the first 15 min builds the opening range)
+  trade_window_end: "15:15"      # ET - no new trades after this
+
+# ── Exit rules (shared by every bot) ────────────────────────
+exits:
+  stop_loss_pct: 25        # sell if the option drops 25% from what we paid ("stopped out")
+  trail_activate_pct: 15   # once we're up 15%, start the trailing stop ("riding the trail")
+  trail_giveback_pct: 10   # ...then sell if it falls 10% from its best price
+  take_profit_pct: 60      # sell outright if up 60% ("profit locked")
+  max_minutes_in_trade: 45 # sell if a trade has been open this long
+
+# ── Option contract choice ──────────────────────────────────
+contracts:
+  min_days_to_expiry: 1    # 1 = "one day to expiration" like the video. 0 = same-day (0DTE) - much riskier.
+  max_days_to_expiry: 7
+  strike_offset: 1         # 0 = closest to current price (at-the-money). 1 = one strike out-of-the-money (cheaper).
+
+# ── The workers (one tower each) ────────────────────────────
+# strategy options:
+#   combo       = the video's trigger: a 1-min candle closes across VWAP, OR across the 50 EMA,
+#                 OR price breaks out of the first 15 minutes' range. Close above -> CALL, below -> PUT.
+#   ema_cross, vwap_cross, orb, trend, buy_the_dip = one trigger only
+workers:
+  - name: QQQ OG
+    symbol: QQQ
+    strategy: combo
+    daily_goal: 60         # $ - once this bot is up this much today it goes "off duty"
+    daily_max_loss: 50     # $ - once this bot is down this much today it stops
+    max_trades_per_day: 4
+    cooldown_minutes: 10
+
+  - name: SPY
+    symbol: SPY
+    strategy: combo
+    daily_goal: 60
+    daily_max_loss: 50
+    max_trades_per_day: 4
+    cooldown_minutes: 10
+
+  - name: IWM
+    symbol: IWM
+    strategy: combo
+    daily_goal: 60
+    daily_max_loss: 50
+    max_trades_per_day: 3
+    cooldown_minutes: 15
+
+  - name: QQQ TREND
+    symbol: QQQ
+    strategy: trend
+    daily_goal: 60
+    daily_max_loss: 50
+    max_trades_per_day: 3
+    cooldown_minutes: 15
+
+  - name: BUY THE DIP
+    symbol: QQQ
+    strategy: buy_the_dip
+    daily_goal: 60
+    daily_max_loss: 50
+    max_trades_per_day: 2
+    cooldown_minutes: 20
+
+# ── Strategy tuning (advanced - fine to leave alone) ────────
+strategy_settings:
+  combo:       { use: [vwap_cross, ema_cross, orb] }
+  ema_cross:   { ema_length: 50, confirm_bars: 1, max_atr_away: 1.0 }
+  vwap_cross:  { confirm_bars: 1, max_atr_away: 1.0 }
+  orb:         { range_minutes: 15 }
+  trend:       { fast: 9, mid: 21, slow: 50 }
+  buy_the_dip: { dip_atr: 1.5 }
+
+# ── Backtest / demo pricing (only used when simulating) ─────
+simulation:
+  implied_vol: { QQQ: 0.20, SPY: 0.16, IWM: 0.24 }
+  slippage_per_contract: 0.03   # $ per share of option (x100 per contract) lost on each fill
+  fee_per_contract: 0.03        # regulatory fees, $ per contract
+
+dashboard_port: 8050
