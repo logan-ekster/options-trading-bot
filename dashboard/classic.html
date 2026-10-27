@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bot City</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0718; --bg2:#140d33; --panel:#17103a; --line:#2c2266;
+    --text:#e9e6ff; --muted:#8c84c4; --green:#4dffa6; --red:#ff4d7d;
+    --cyan:#5ce1ff; --gold:#ffd166; --violet:#8a5cff;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace; --sans:'Space Grotesk',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#2a1a7a 0%,var(--bg) 60%) fixed,var(--bg);
+       color:var(--text);font-family:var(--sans);min-height:100vh}
+  .wrap{max-width:1280px;margin:0 auto;padding:16px}
+  header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+  h1{margin:0;font-size:26px;letter-spacing:.12em;text-shadow:0 0 18px var(--violet)}
+  .badge{font-family:var(--mono);font-size:12px;padding:5px 10px;border-radius:999px;border:1px solid currentColor;letter-spacing:.08em}
+  .badge.paper{color:var(--cyan)} .badge.live{color:var(--red);box-shadow:0 0 14px var(--red)} .badge.sim{color:var(--gold)}
+  .meta{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  .halt{margin-top:10px;padding:10px 14px;border:1px solid var(--red);color:var(--red);border-radius:10px;display:none;font-family:var(--mono)}
+
+  /* skyline */
+  .city{position:relative;margin:18px 0;height:330px;border-radius:18px;overflow:hidden;
+        background:linear-gradient(180deg,#120a35 0%,#24127a 70%,#2d1592 100%);border:1px solid var(--line)}
+  .stars{position:absolute;inset:0;background-image:radial-gradient(1px 1px at 20% 30%,#fff8,transparent),radial-gradient(1px 1px at 70% 20%,#fff6,transparent),radial-gradient(1px 1px at 45% 12%,#fff7,transparent),radial-gradient(1px 1px at 85% 40%,#fff5,transparent),radial-gradient(1px 1px at 10% 15%,#fff6,transparent)}
+  .grid{position:absolute;left:-20%;right:-20%;bottom:-40px;height:120px;transform:perspective(300px) rotateX(60deg);
+        background-image:linear-gradient(var(--violet) 1px,transparent 1px),linear-gradient(90deg,var(--violet) 1px,transparent 1px);background-size:40px 40px;opacity:.35}
+  .towers{position:absolute;left:0;right:0;bottom:46px;display:flex;justify-content:space-around;align-items:flex-end;padding:0 3%}
+  .tower{position:relative;width:15%;max-width:120px;display:flex;flex-direction:column;align-items:center}
+  .tower .sign{font-family:var(--mono);font-size:11px;text-align:center;background:#0b0820d9;border:1px solid var(--line);
+        border-radius:8px;padding:4px 6px;margin-bottom:8px;white-space:nowrap;min-width:92px}
+  .sign b{display:block;font-size:12px;color:var(--text)} .sign .st{color:var(--muted)}
+  .bldg{width:100%;border:1px solid #6e5cff88;border-bottom:none;background:
+        repeating-linear-gradient(90deg,transparent 0 10px,#0000 10px 12px),
+        radial-gradient(circle,#ffe08a 1.2px,transparent 1.6px) 0 0/12px 14px,#0d0a2b;
+        box-shadow:0 0 22px #6e5cff44 inset;transition:height .6s ease;border-radius:4px 4px 0 0}
+  .tower.trade .bldg{border-color:var(--cyan);box-shadow:0 0 26px var(--cyan)}
+  .tower.off .bldg{filter:saturate(.3) brightness(.7)}
+  .beam{position:absolute;bottom:100%;left:50%;width:10px;height:400px;transform:translateX(-50%);
+        background:linear-gradient(0deg,var(--green),transparent);opacity:0;pointer-events:none;filter:blur(1px)}
+  .tower.firing .beam{animation:beam 1.6s ease-out}
+  .tower.firing.put .beam{background:linear-gradient(0deg,var(--red),transparent)}
+  @keyframes beam{0%{opacity:0}15%{opacity:1}100%{opacity:0}}
+  .vault{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);text-align:center;font-family:var(--mono);
+         background:#0b0820e6;border:1px solid var(--gold);border-radius:12px;padding:6px 16px;box-shadow:0 0 20px #ffd16655}
+  .vault small{color:var(--gold);letter-spacing:.15em;font-size:10px}
+  .vault div{font-size:22px;font-weight:600}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .kpi small{color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+  .kpi div{font-family:var(--mono);font-size:20px;margin-top:4px}
+  .pos{color:var(--green)} .neg{color:var(--red)}
+
+  .workers{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;min-width:0}
+  .card.trade{border-color:var(--cyan);box-shadow:0 0 18px #5ce1ff33}
+  .card h3{margin:0;font-size:16px;display:flex;justify-content:space-between;gap:8px}
+  .card .sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin:2px 0 10px}
+  .scanner{background:#0b0820;border-radius:10px;padding:8px 10px;font-family:var(--mono);font-size:12px}
+  .scanner .t{color:var(--green);font-weight:600;font-size:11px;letter-spacing:.1em}
+  .bar{height:8px;background:#241a5c;border-radius:6px;margin:6px 0 2px;overflow:hidden}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--green),var(--cyan));transition:width .4s}
+  .position{margin-top:8px;font-family:var(--mono);font-size:12px;padding:8px 10px;border-radius:10px;border:1px dashed var(--cyan)}
+  .thoughts{margin-top:8px;font-family:var(--mono);font-size:11.5px;max-height:170px;overflow:auto}
+  .thoughts div{padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .thoughts .tm{color:var(--muted);margin-right:6px}
+  .fire{color:var(--gold)} .win{color:var(--green)} .loss,.bad{color:var(--red)} .muted{color:var(--muted)} .info{color:var(--cyan)}
+
+  .row2{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:16px}
+  @media (max-width:860px){.row2{grid-template-columns:1fr}.tower .sign{min-width:0;font-size:9px}.city{height:280px}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;min-width:0}
+  .panel h4{margin:0 0 8px;font-size:13px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  #chart{width:100%;height:180px;display:block}
+  .tick{font-family:var(--mono);font-size:11.5px;max-height:200px;overflow:auto}
+  .tick div{padding:3px 0;border-bottom:1px solid #ffffff0d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  footer{color:var(--muted);font-size:11px;margin:18px 0 6px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>BOT CITY</h1>
+    <span id="mode" class="badge paper">—</span>
+  </header>
+  <div class="meta" id="meta"></div>
+  <div class="halt" id="halt"></div>
+
+  <section class="city">
+    <div class="stars"></div><div class="grid"></div>
+    <div class="towers" id="towers"></div>
+    <div class="vault"><small>THE VAULT · TODAY</small><div id="vault">$0</div></div>
+  </section>
+
+  <div class="kpis" id="kpis"></div>
+  <div class="workers" id="workers"></div>
+
+  <div class="row2">
+    <div class="panel"><h4>Daily P&amp;L</h4><canvas id="chart"></canvas></div>
+    <div class="panel"><h4>Trade tape</h4><div class="tick" id="tape"></div></div>
+  </div>
+  <footer>Classic view · <a href="/" style="color:var(--cyan)">back to 3D city</a> · refreshes every second · nothing here is financial advice</footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money = (n, sign=true) => { n = +n || 0; const s = (sign && n > 0 ? '+' : n < 0 ? '−' : '') + '$' + Math.abs(n).toLocaleString(undefined,{maximumFractionDigits:0}); return s; };
+const cls = n => (+n > 0 ? 'pos' : +n < 0 ? 'neg' : '');
+const seenFire = {};
+
+function render(s){
+  if (!s || !s.workers) { $('meta').textContent = 'Waiting for the bot to start…'; return; }
+  const m = $('mode'); m.textContent = s.mode;
+  m.className = 'badge ' + (/LIVE/.test(s.mode) ? 'live' : /PAPER/.test(s.mode) ? 'paper' : 'sim');
+  const upd = s.updated ? new Date(s.updated) : null;
+  $('meta').innerHTML = [
+    `broker: ${esc(s.broker)}`, s.day ? `day: ${esc(s.day)}` : '',
+    upd ? `updated: ${upd.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : '',
+    ...Object.entries(s.prices||{}).map(([k,v]) => `${esc(k)} ${(+v).toFixed(2)}`)
+  ].filter(Boolean).map(x => `<span>${x}</span>`).join('');
+  $('halt').style.display = s.halted ? 'block' : 'none';
+  $('halt').textContent = s.halted ? '⛔ HALTED — ' + s.halted : '';
+
+  const v = $('vault'); v.textContent = money(s.day_total); v.className = cls(s.day_total);
+
+  // towers
+  const maxAbs = Math.max(200, ...s.workers.map(w => Math.abs(w.all_time)));
+  $('towers').innerHTML = s.workers.map((w,i) => {
+    const h = 60 + 150 * Math.max(0, (w.all_time + maxAbs) / (2*maxAbs));
+    const off = /off duty|stopped|halted|done/.test(w.status);
+    const firing = w.last_fire && seenFire[w.name] !== w.last_fire && seenFire[w.name] !== undefined;
+    return `<div class="tower ${w.position?'trade':''} ${off?'off':''} ${firing?'firing':''} ${w.position&&w.position.kind==='put'?'put':''}">
+      <div class="beam"></div>
+      <div class="sign"><b>${esc(w.name)}</b><span class="st">${esc(w.status)}</span><br><span class="${cls(w.day_pnl)}">${money(w.day_pnl)} today</span></div>
+      <div class="bldg" style="height:${h}px"></div></div>`;
+  }).join('');
+  s.workers.forEach(w => { seenFire[w.name] = w.last_fire || null; });
+
+  // KPIs
+  const st = s.stats || {}, hist = s.history || [];
+  const green = hist.filter(h => h.pnl > 0).length;
+  const n = st.n || 0;
+  $('kpis').innerHTML = [
+    ['All-time P&L', `<span class="${cls(st.total)}">${money(st.total)}</span>`],
+    ['Today', `<span class="${cls(s.day_total)}">${money(s.day_total)}</span>`],
+    ['Win rate', n ? Math.round(100*(st.wins||0)/n) + '%' : '—'],
+    ['Trades', n],
+    ['Green days', hist.length ? `${green}/${hist.length}` : '—'],
+    ['Avg win / loss', n ? `<span class="pos">${money(st.avg_win,false)}</span> / <span class="neg">${money(st.avg_loss,false)}</span>` : '—'],
+  ].map(([k,v]) => `<div class="kpi"><small>${k}</small><div>${v}</div></div>`).join('');
+
+  // worker cards
+  $('workers').innerHTML = s.workers.map(w => {
+    const p = w.position;
+    return `<div class="card ${p?'trade':''}">
+      <h3><span>${esc(w.name)}</span><span class="${cls(w.day_pnl)}">${money(w.day_pnl)}</span></h3>
+      <div class="sub">${esc(w.symbol)} · ${esc(w.strategy)} · ${w.trades_today}/${w.max_trades} trades · goal ${money(w.daily_goal,false)} · ${esc(w.status)}</div>
+      <div class="scanner"><div class="t">SIGNAL SCANNER</div>${esc(w.scan.label)}
+        <div class="bar"><i style="width:${w.scan.charge}%"></i></div><span class="muted">${w.scan.charge}% charged</span></div>
+      ${p ? `<div class="position">${p.kind==='call'?'▲ CALL':'▼ PUT'} ×${p.qty} ${esc(p.contract)}<br>
+          in ${(+p.entry).toFixed(2)} → now ${(+p.last).toFixed(2)} <span class="${cls(p.gain_pct)}">${p.gain_pct>0?'+':''}${p.gain_pct}% (${money(p.unrealized)})</span>
+          ${p.trailing ? ' · <span class="win">riding the trail</span>' : ''}</div>` : ''}
+      <div class="thoughts">${(w.thoughts||[]).map(t => `<div class="${esc(t.tone)}"><span class="tm">${esc(t.t)}</span>${esc(t.text)}</div>`).join('') || '<div class="muted">no thoughts yet</div>'}</div>
+    </div>`;
+  }).join('');
+
+  $('tape').innerHTML = (s.ticker||[]).map(t => `<div class="${/sold -|stopped/.test(t)?'neg':/sold \+/.test(t)?'pos':''}">${esc(t)}</div>`).join('') || '<div class="muted">no trades yet</div>';
+  drawChart(hist);
+}
+
+function drawChart(hist){
+  const c = $('chart'), dpr = window.devicePixelRatio || 1;
+  const W = c.clientWidth, H = c.clientHeight; c.width = W*dpr; c.height = H*dpr;
+  const g = c.getContext('2d'); g.scale(dpr,dpr); g.clearRect(0,0,W,H);
+  if (!hist.length){ g.fillStyle='#8c84c4'; g.font='12px JetBrains Mono, monospace'; g.fillText('No closed trades yet', 10, 20); return; }
+  const max = Math.max(1, ...hist.map(h => Math.abs(h.pnl)));
+  const mid = H/2, bw = Math.max(3, Math.min(28, (W-20)/hist.length - 4));
+  g.strokeStyle='#2c2266'; g.beginPath(); g.moveTo(0,mid); g.lineTo(W,mid); g.stroke();
+  hist.forEach((h,i) => {
+    const x = 10 + i*((W-20)/hist.length), bh = (Math.abs(h.pnl)/max)*(mid-14);
+    g.fillStyle = h.pnl >= 0 ? '#4dffa6' : '#ff4d7d';
+    g.shadowColor = g.fillStyle; g.shadowBlur = 8;
+    g.fillRect(x, h.pnl >= 0 ? mid-bh : mid, bw, Math.max(1,bh));
+  });
+  g.shadowBlur = 0; g.fillStyle='#8c84c4'; g.font='10px JetBrains Mono, monospace';
+  g.fillText(hist[0].day, 10, H-2); const last = hist[hist.length-1].day; g.fillText(last, W - g.measureText(last).width - 6, H-2);
+}
+
+async function poll(){
+  try { const r = await fetch('state.json?_=' + Date.now()); render(await r.json()); }
+  catch(e){ $('meta').textContent = 'Bot not running (start it with python run.py …)'; }
+}
+poll(); setInterval(poll, 1000);
+</script>
+</body>
+</html>

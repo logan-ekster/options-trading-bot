@@ -1,0 +1,821 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bot City</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0626; --panel:#0d0a24e8; --line:#3a2c8a; --text:#efeaff; --muted:#9a90d6;
+    --green:#4dffa6; --red:#ff4d8a; --cyan:#5ce1ff; --violet:#8a5cff; --gold:#ffc35c;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace; --sans:'Space Grotesk',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--sans)}
+  canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .pos{color:var(--green)} .neg{color:var(--red)} .muted{color:var(--muted)}
+
+  /* ── HUD ── */
+  .top{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+       padding:14px 16px;pointer-events:none;background:linear-gradient(#0b0626cc,transparent)}
+  .top > *{pointer-events:auto}
+  .brand h1{margin:0;font-size:24px;letter-spacing:.16em;text-shadow:0 0 18px var(--violet),0 0 4px #fff8}
+  .brand .meta{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px;display:flex;gap:10px;flex-wrap:wrap}
+  .badge{font-family:var(--mono);font-size:11px;padding:4px 9px;border-radius:999px;border:1px solid currentColor;letter-spacing:.08em;margin-left:10px;vertical-align:middle}
+  .badge.paper{color:var(--cyan)} .badge.live{color:var(--red);box-shadow:0 0 14px var(--red)} .badge.sim{color:var(--gold)}
+  .right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .chip{font-family:var(--mono);font-size:11px;background:#120c3acc;border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+  .today{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .today b{font-size:20px;margin-left:6px}
+  .btns{display:flex;gap:6px}
+  button,.btn{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--text);background:#1a1250;border:1px solid var(--violet);
+    border-radius:8px;padding:6px 10px;cursor:pointer;text-decoration:none}
+  button:hover,.btn:hover{box-shadow:0 0 12px var(--violet)}
+  #board{position:fixed;left:16px;top:96px;width:230px;background:#0d0a24d9;border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+    font-family:var(--mono);font-size:11px;box-shadow:0 0 18px #0008}
+  #board h3{margin:0 0 6px;font-size:10px;letter-spacing:.18em;color:var(--gold);font-weight:800}
+  #board .r{display:grid;grid-template-columns:16px 1fr 58px;gap:6px;align-items:center;padding:3px 0;cursor:pointer}
+  #board .r:hover{color:#fff}
+  #board .rk{color:var(--muted)}
+  #board .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #board .pl{text-align:right;font-weight:600}
+  #board .bar2{grid-column:2/4;height:3px;background:#241a5c;border-radius:2px;overflow:hidden;margin-top:-1px}
+  #board .bar2 i{display:block;height:100%}
+  #board .goal{margin-top:8px;padding-top:6px;border-top:1px solid #ffffff14;color:var(--muted);font-size:10px;line-height:1.5}
+  #tchart{width:100%;height:150px;display:block;background:#05040f;border-radius:8px}
+  .tl .row{display:grid;grid-template-columns:44px 1fr auto;gap:6px}
+  #halt{position:fixed;top:86px;left:50%;transform:translateX(-50%);display:none;font-family:var(--mono);font-size:13px;
+    color:var(--red);border:1px solid var(--red);background:#2a0820e6;padding:8px 14px;border-radius:10px;box-shadow:0 0 18px #ff4d8a66}
+
+  /* ── floating labels over towers ── */
+  #labels{position:fixed;inset:0;pointer-events:none}
+  .lbl{position:absolute;transform:translate(-50%,-100%);font-family:var(--mono);font-size:10.5px;text-align:center;line-height:1.35;
+    background:#0b0820d9;border:1px solid var(--line);border-radius:7px;padding:4px 7px;white-space:nowrap;pointer-events:auto;cursor:pointer;
+    box-shadow:0 0 10px #000a}
+  .lbl b{display:block;font-size:11.5px;letter-spacing:.04em;color:#fff}
+  .lbl .st{color:var(--muted)}
+  .lbl.trade{border-color:var(--cyan);box-shadow:0 0 14px #5ce1ff77}
+  .lbl.off{opacity:.75}
+  .lbl.halt{border-color:var(--red)}
+  .lbl.vault{border-color:var(--gold);box-shadow:0 0 18px #ffc35c55;padding:6px 12px}
+  .lbl.vault small{color:var(--gold);letter-spacing:.14em;font-size:9.5px;display:block}
+  .lbl.vault .big{font-size:20px;font-weight:800;display:block}
+  .lbl.vault .sub{color:var(--muted);font-size:9.5px}
+
+  /* ── bottom strip ── */
+  .bottom{position:fixed;left:0;right:0;bottom:0;padding:0 12px 10px;background:linear-gradient(transparent,#0b0626ee 35%)}
+  #days{display:flex;gap:6px;overflow-x:auto;padding:14px 2px 8px;scrollbar-width:none}
+  #days::-webkit-scrollbar{display:none}
+  .day{flex:0 0 auto;font-family:var(--mono);font-size:10px;text-align:center;border:1px solid var(--line);border-radius:7px;padding:4px 7px;background:#120c3acc;min-width:62px}
+  .day b{display:block;font-size:11px}
+  .day.now{border-color:var(--cyan);box-shadow:0 0 10px #5ce1ff66}
+  .day.best{border-color:var(--gold)}
+  .tape{overflow:hidden;white-space:nowrap;font-family:var(--mono);font-size:11px;border-top:1px solid #ffffff14;padding-top:6px;mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
+  .tape .run{display:inline-block;padding-left:100%;animation:tape 60s linear infinite}
+  .tape span{margin-right:34px}
+  @keyframes tape{to{transform:translateX(-100%)}}
+
+  /* ── signal scanner panel ── */
+  #panel{position:fixed;top:84px;right:16px;width:min(380px,calc(100vw - 32px));max-height:calc(100vh - 210px);overflow:auto;
+    background:var(--panel);border:1px solid var(--cyan);border-radius:14px;padding:14px;box-shadow:0 0 30px #5ce1ff33;
+    font-family:var(--mono);font-size:12px;transition:transform .35s ease,opacity .35s ease}
+  #panel.hidden{transform:translateX(30px);opacity:0;pointer-events:none}
+  #panel h2{margin:0 0 2px;font-family:var(--sans);font-size:18px;display:flex;justify-content:space-between;align-items:center}
+  #panel .x{background:none;border:none;font-size:18px;padding:0 4px;color:var(--muted)}
+  .scan{background:#05040f;border-radius:10px;padding:10px;margin:10px 0;border:1px solid #1d1650}
+  .scan .t{color:var(--green);font-weight:800;letter-spacing:.12em}
+  .bar{height:10px;background:#241a5c;border-radius:6px;margin:8px 0 4px;overflow:hidden}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--green),var(--cyan));box-shadow:0 0 10px var(--green);transition:width .4s}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}
+  .stats div{background:#120c3a;border-radius:8px;padding:6px;text-align:center;font-size:10px;color:var(--muted)}
+  .stats b{display:block;font-size:13px;color:var(--text);margin-top:2px}
+  .posbox{border:1px dashed var(--cyan);border-radius:10px;padding:8px;margin:8px 0}
+  .thoughts .row{padding:3px 0;border-bottom:1px solid #ffffff0a}
+  .thoughts .tm{color:var(--muted);margin-right:6px}
+  .fire{color:var(--gold)} .win{color:var(--green)} .loss,.bad{color:var(--red)} .info{color:var(--cyan)}
+
+  /* ── recap / payroll modal ── */
+  #recap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#05031299;backdrop-filter:blur(6px);z-index:20;padding:16px}
+  #recap.hidden{display:none}
+  .card{width:min(760px,100%);text-align:center;font-family:var(--mono)}
+  .card small{letter-spacing:.3em;color:#d8d0ff;font-size:12px}
+  .card .total{font-size:clamp(44px,9vw,84px);font-weight:800;margin:4px 0;text-shadow:0 0 30px currentColor}
+  .card .sub{color:var(--muted);font-size:12px}
+  .bars{display:flex;justify-content:center;gap:4px;height:180px;margin:22px 0 6px;border-bottom:1px solid #ffffff22}
+  .bars .col{flex:1;max-width:42px;display:flex;flex-direction:column}
+  .bars .bt{flex:1;display:flex;align-items:flex-end}
+  .bars .bb{flex:1;display:flex;align-items:flex-start;border-top:1px solid #ffffff33}
+  .bars.allup .bb{display:none}
+  .bars .b{width:100%;animation:grow .9s cubic-bezier(.2,.9,.3,1.2) both;min-height:2px}
+  .bars .b.up{border-radius:3px 3px 0 0;transform-origin:bottom;background:linear-gradient(#8dffc8,#3be89a);box-shadow:0 0 14px #4dffa699}
+  .bars .b.dn{border-radius:0 0 3px 3px;transform-origin:top;background:linear-gradient(#ff4d8a,#ff8db4);box-shadow:0 0 14px #ff4d8a99}
+  @keyframes grow{from{transform:scaleY(0)}}
+  .xl{display:flex;justify-content:space-between;font-size:9.5px;color:var(--muted)}
+  .best{color:var(--gold);font-size:15px;font-weight:800;margin-top:14px}
+  .medals{display:flex;justify-content:center;gap:18px;flex-wrap:wrap;margin-top:6px;font-size:12px}
+  .card .btns{justify-content:center;margin-top:16px}
+
+  #nogl{position:fixed;inset:0;display:none;align-items:center;justify-content:center;text-align:center;font-family:var(--mono);padding:20px}
+  @media (max-width:700px){
+    .brand h1{font-size:17px;white-space:nowrap} .brand .badge{font-size:9px;padding:3px 6px;margin-left:6px}
+    .brand .meta,.chips,#board{display:none} #panel{top:auto;bottom:110px;max-height:55vh}
+    .btns button,.btns .btn{font-size:9.5px;padding:5px 7px} .today b{font-size:16px}
+    .top{flex-direction:column;gap:6px} .right{align-items:flex-start;flex-direction:row;flex-wrap:wrap;gap:8px}
+    .lbl{font-size:9px} .lbl b{font-size:10px}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="labels"></div>
+
+<div class="top">
+  <div class="brand">
+    <h1>BOT CITY<span id="mode" class="badge paper">—</span></h1>
+    <div class="meta" id="meta">connecting…</div>
+  </div>
+  <div class="right">
+    <div class="today">TODAY<b id="today">$0</b></div>
+    <div class="chips" id="chips"></div>
+    <div class="btns">
+      <button id="btnRecap">PAYROLL</button>
+      <button id="btnSpin">SPIN: ON</button>
+      <a class="btn" href="classic.html">CLASSIC VIEW</a>
+    </div>
+  </div>
+</div>
+<div id="halt"></div>
+<div id="board"></div>
+
+<aside id="panel" class="hidden"></aside>
+
+<div id="recap" class="hidden"></div>
+
+<div class="bottom">
+  <div id="days"></div>
+  <div class="tape"><div class="run" id="tape"></div></div>
+</div>
+
+<div id="nogl"><div>3D isn't available in this browser.<br><br><a class="btn" href="classic.html">Open the classic dashboard</a></div></div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
+<script src="vendor/CopyShader.js"></script>
+<script src="vendor/LuminosityHighPassShader.js"></script>
+<script src="vendor/EffectComposer.js"></script>
+<script src="vendor/RenderPass.js"></script>
+<script src="vendor/ShaderPass.js"></script>
+<script src="vendor/UnrealBloomPass.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money = (n, sign = true) => { n = +n || 0; return (sign && n > 0 ? '+' : n < 0 ? '−' : '') + '$' + Math.abs(n).toLocaleString(undefined,{maximumFractionDigits:0}); };
+const cls = n => (+n > 0 ? 'pos' : +n < 0 ? 'neg' : '');
+const C = { sky:0x0b0626, ground:0x0e0933, platform:0x130d3d, violet:0x8a5cff, cyan:0x5ce1ff, green:0x4dffa6,
+            pink:0xff4d8a, gold:0xffc35c, cream:0xffe6b0, window1:'#ffe08a', window2:'#8fe9ff' };
+
+// ───────────────────────── renderer / scene ─────────────────────────
+let renderer;
+try { renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: true }); }
+catch (e) { $('nogl').style.display = 'flex'; throw e; }
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(innerWidth, innerHeight);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(C.sky);
+scene.fog = new THREE.FogExp2(C.sky, 0.011);
+const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 600);
+const HOME = { pos: new THREE.Vector3(0, 17, 34), target: new THREE.Vector3(0, 6, -3) };
+function fitHome() {
+  const narrow = innerWidth / innerHeight < 0.9;
+  HOME.pos.set(0, narrow ? 34 : 17, narrow ? 62 : 34);
+  HOME.target.set(0, narrow ? 7 : 6, -3);
+}
+fitHome();
+camera.position.copy(HOME.pos);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.copy(HOME.target);
+controls.enableDamping = true; controls.dampingFactor = 0.06;
+controls.autoRotate = true; controls.autoRotateSpeed = 0.35;
+controls.maxPolarAngle = 1.42; controls.minDistance = 8; controls.maxDistance = 75;
+
+let composer = null, bloom = null;
+if (THREE.EffectComposer && THREE.UnrealBloomPass) {
+  composer = new THREE.EffectComposer(renderer);
+  composer.addPass(new THREE.RenderPass(scene, camera));
+  bloom = new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.95, 0.55, 0.32);
+  composer.addPass(bloom);
+}
+scene.add(new THREE.AmbientLight(0x8070ff, 0.55));
+scene.add(new THREE.HemisphereLight(0x9b7bff, 0x10082e, 0.6));
+const key = new THREE.PointLight(0xffd9a0, 0.6, 60); key.position.set(0, 10, 8); scene.add(key);
+
+// ───────────────────────── textures ─────────────────────────
+function canvasTex(w, h, draw) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  draw(cv.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(cv); t.anisotropy = 4; return t;
+}
+function windowTex(seed = 1, dense = 0.45) {
+  let s = seed * 9301 + 49297; const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const t = canvasTex(64, 128, (g, w, h) => {
+    g.fillStyle = '#0a0826'; g.fillRect(0, 0, w, h);
+    for (let y = 4; y < h; y += 8) for (let x = 4; x < w; x += 12) {
+      if (rnd() < dense) { g.fillStyle = rnd() < 0.75 ? C.window1 : C.window2; g.fillRect(x, y, 6, 4); }
+      else { g.fillStyle = '#161246'; g.fillRect(x, y, 6, 4); }
+    }
+  });
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+}
+const glowTex = canvasTex(128, 128, (g, w) => {
+  const gr = g.createRadialGradient(w/2, w/2, 0, w/2, w/2, w/2);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, w, w);
+});
+function textTex(lines, { w = 512, h = 128, color = '#fff', border = null, bg = 'rgba(8,6,28,.85)', font = 'JetBrains Mono' } = {}) {
+  return canvasTex(w, h, (g) => {
+    if (bg) { g.fillStyle = bg; roundRect(g, 4, 4, w - 8, h - 8, 14); g.fill(); }
+    if (border) { g.strokeStyle = border; g.lineWidth = 6; g.shadowColor = border; g.shadowBlur = 18; roundRect(g, 6, 6, w - 12, h - 12, 14); g.stroke(); g.shadowBlur = 0; }
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    const n = lines.length;
+    lines.forEach((ln, i) => {
+      const size = ln.size || (n === 1 ? h * 0.5 : h * 0.32);
+      g.font = `800 ${size}px "${font}", monospace`; g.fillStyle = ln.color || color;
+      g.shadowColor = ln.color || color; g.shadowBlur = ln.glow ?? 10;
+      g.fillText(ln.text, w / 2, h * (i + 0.5) / n + (n > 1 ? (i === 0 ? 4 : -4) : 0));
+    });
+  });
+}
+function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+const hex = n => '#' + n.toString(16).padStart(6, '0');
+
+// ───────────────────────── ground & city shell ─────────────────────────
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: C.ground, roughness: 0.9 }));
+ground.rotation.x = -Math.PI / 2; scene.add(ground);
+const grid = new THREE.GridHelper(600, 150, C.violet, C.violet);
+grid.material.transparent = true; grid.material.opacity = 0.22; grid.position.y = 0.02; scene.add(grid);
+
+const PLAT_R = 22;
+const plat = new THREE.Mesh(new THREE.CylinderGeometry(PLAT_R, PLAT_R + 0.6, 0.5, 96), new THREE.MeshStandardMaterial({ color: C.platform, roughness: 0.6, metalness: 0.2 }));
+plat.position.y = 0.25; scene.add(plat);
+function neonRing(r, color, tube = 0.07, y = 0.55) {
+  const m = new THREE.Mesh(new THREE.TorusGeometry(r, tube, 8, 160), new THREE.MeshBasicMaterial({ color }));
+  m.rotation.x = Math.PI / 2; m.position.y = y; scene.add(m); return m;
+}
+neonRing(PLAT_R + 0.2, C.cyan, 0.12);
+neonRing(17.5, 0xffffff, 0.05); neonRing(16.8, C.violet, 0.04);
+neonRing(7.2, 0xffffff, 0.06); neonRing(6.6, C.cyan, 0.04);
+// spokes
+{
+  const pts = [];
+  for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * 7.4, 0.56, Math.sin(a) * 7.4), new THREE.Vector3(Math.cos(a) * PLAT_R, 0.56, Math.sin(a) * PLAT_R)); }
+  const ls = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: C.violet, transparent: true, opacity: 0.45 }));
+  scene.add(ls);
+}
+// ring of moving lights (the "highway")
+const lightRing = new THREE.Group(); scene.add(lightRing);
+{
+  const g = new THREE.SphereGeometry(0.16, 8, 8), m = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2, s = new THREE.Mesh(g, m); s.position.set(Math.cos(a) * 17.15, 0.7, Math.sin(a) * 17.15); lightRing.add(s); }
+  // railing posts
+  const pg = new THREE.CylinderGeometry(0.05, 0.05, 1.2, 6), pm = new THREE.MeshBasicMaterial({ color: 0xb9a8ff });
+  for (let i = 0; i < 48; i++) { const a = i / 48 * Math.PI * 2, p = new THREE.Mesh(pg, pm); p.position.set(Math.cos(a) * (PLAT_R + 0.1), 1.1, Math.sin(a) * (PLAT_R + 0.1)); scene.add(p); }
+}
+// stars
+{
+  const n = 900, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { const th = Math.random() * Math.PI * 2, ph = Math.random() * 0.45 * Math.PI, r = 260;
+    pos[i*3] = r * Math.cos(th) * Math.cos(ph); pos[i*3+1] = 20 + r * Math.sin(ph); pos[i*3+2] = r * Math.sin(th) * Math.cos(ph); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  scene.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 0.9, transparent: true, opacity: 0.7, fog: false })));
+}
+// background skyline
+{
+  const tex = windowTex(77, 0.3); tex.repeat.set(1, 2);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x2a2266, map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.55 });
+  const N = 220, inst = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, N), d = new THREE.Object3D();
+  for (let i = 0; i < N; i++) {
+    const a = Math.random() * Math.PI * 2, r = 30 + Math.random() * 70, h = 3 + Math.random() * (r < 50 ? 10 : 22);
+    d.position.set(Math.cos(a) * r, h / 2, Math.sin(a) * r); d.scale.set(2 + Math.random() * 3, h, 2 + Math.random() * 3);
+    d.rotation.y = Math.random() * Math.PI; d.updateMatrix(); inst.setMatrixAt(i, d.matrix);
+  }
+  scene.add(inst);
+}
+// little buildings on the platform (the "blocks" in the video)
+{
+  const tex = windowTex(13, 0.55); tex.repeat.set(1, 1);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x302a7a, map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.8 });
+  const N = 70, inst = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, N), d = new THREE.Object3D();
+  let k = 0;
+  for (let i = 0; i < 400 && k < N; i++) {
+    const a = Math.random() * Math.PI * 2, r = 18.5 + Math.random() * 3;
+    const h = 0.6 + Math.random() * 1.6;
+    d.position.set(Math.cos(a) * r, 0.5 + h / 2, Math.sin(a) * r); d.scale.set(0.8 + Math.random() * 0.8, h, 0.8 + Math.random() * 0.8);
+    d.rotation.y = -a; d.updateMatrix(); inst.setMatrixAt(k++, d.matrix);
+  }
+  scene.add(inst);
+}
+// background "city grid" wall: vertical light lines + price line
+const chartGroup = new THREE.Group(); chartGroup.position.set(0, 0, -36); scene.add(chartGroup);
+{
+  const pts = [];
+  for (let x = -44; x <= 44; x += 4) pts.push(new THREE.Vector3(x, 1, 0), new THREE.Vector3(x, 24, 0));
+  chartGroup.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xcfc6ff, transparent: true, opacity: 0.18 })));
+}
+let chartMesh = null, chartKey = '';
+function updateChart(series) {
+  if (!series || series.length < 3) return;
+  const k = series.length + ':' + series[series.length - 1];
+  if (k === chartKey) return; chartKey = k;
+  const lo = Math.min(...series), hi = Math.max(...series), span = Math.max(hi - lo, 1e-6);
+  const pts = series.map((v, i) => new THREE.Vector3(-44 + 88 * i / Math.max(series.length - 1, 1), 5 + 16 * (v - lo) / span, 0));
+  const curve = new THREE.CatmullRomCurve3(pts);
+  const geo = new THREE.TubeGeometry(curve, Math.min(600, series.length * 2), 0.14, 6, false);
+  if (chartMesh) { chartGroup.remove(chartMesh); chartMesh.geometry.dispose(); }
+  const up = series[series.length - 1] >= series[0];
+  chartMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: up ? 0xd9fff0 : 0xffd6e6 }));
+  chartGroup.add(chartMesh);
+}
+
+// ───────────────────────── the vault ─────────────────────────
+const vault = new THREE.Group(); vault.position.set(0, 0.5, 8); vault.scale.setScalar(0.85); scene.add(vault);
+{
+  const stripe = canvasTex(256, 64, (g, w, h) => { for (let x = 0; x < w; x += 32) { g.fillStyle = '#f2a65a'; g.fillRect(x, 0, 22, h); g.fillStyle = '#fff1d6'; g.fillRect(x + 22, 0, 10, h); } });
+  stripe.wrapS = THREE.RepeatWrapping; stripe.repeat.set(3, 1);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.7, 2.4, 48, 1, true), new THREE.MeshStandardMaterial({ map: stripe, emissive: 0xffffff, emissiveMap: stripe, emissiveIntensity: 0.22, side: THREE.DoubleSide }));
+  body.position.y = 1.2; vault.add(body);
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(2.62, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x8f7048 }));
+  dome.position.y = 2.4; vault.add(dome);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffc98a, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }));
+  halo.scale.set(9, 9, 1); halo.position.y = 3.2; vault.add(halo); vault.userData.halo = halo;
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.8, 0.25, 64), new THREE.MeshStandardMaterial({ color: 0x0a0722 }));
+  base.position.y = 0.05; vault.add(base);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(4.65, 0.06, 8, 96), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  rim.rotation.x = Math.PI / 2; rim.position.y = 0.2; vault.add(rim);
+  const cone = new THREE.ConeGeometry(0.22, 0.75, 8), cm = new THREE.MeshBasicMaterial({ color: C.cyan });
+  for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2, c = new THREE.Mesh(cone, cm); c.position.set(Math.cos(a) * 3.9, 0.55, Math.sin(a) * 3.9); vault.add(c); }
+  [body, dome].forEach(m => m.userData.vault = true);
+  vault.userData.pick = [body, dome, base];
+}
+
+// ───────────────────────── towers ─────────────────────────
+const towers = new Map();      // name -> tower object
+const signs = new Map();       // strategy -> sign mesh
+const floaters = [];           // rising "+$27" sprites / bursts
+const STRAT_SIGN = { ema_cross: ['EMA CROSS', '#5ce1ff'], vwap_cross: ['VWAP', '#4dffa6'], trend: ['THE TREND', '#ffc35c'], buy_the_dip: ['BUY THE DIP', '#ff4d8a'],
+                     orb: ['OPENING RANGE', '#ff9f43'], combo: ['VWAP · EMA · ORB', '#5ce1ff'] };
+const REASON = { 'profit locked': 'PROFIT LOCKED', 'rode the trail': 'RODE THE TRAIL', 'stopped out': 'STOPPED OUT', 'time exit': 'TIME EXIT',
+                 'kill switch': 'KILL SWITCH', 'end of day flatten': 'END OF DAY', 'bot stopped': 'BOT STOPPED' };
+const hhmm = m => { const t = 570 + m; return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+const chartVals = ser => (ser || []).map(x => Array.isArray(x) ? x[1] : x);
+
+function towerSlots(n) {
+  // spread towers on an arc behind the vault
+  const out = [];
+  const a0 = -Math.PI * 0.86, a1 = -Math.PI * 0.14, R = 12.5;
+  for (let i = 0; i < n; i++) {
+    const t = n === 1 ? 0.5 : i / (n - 1), a = a0 + (a1 - a0) * t;
+    const r = R + (i % 2 ? 1.8 : 0);
+    out.push(new THREE.Vector3(Math.cos(a) * r, 0.5, Math.sin(a) * r + 1));
+  }
+  return out;
+}
+
+function makeTower(w, slot, idx) {
+  const g = new THREE.Group(); g.position.copy(slot); scene.add(g);
+  g.lookAt(0, slot.y, 12);
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0xb7a6ff, transparent: true, opacity: 0.85 });
+  const unit = new THREE.BoxGeometry(1, 1, 1), edges = new THREE.EdgesGeometry(unit);
+  // pad + trees + side blocks
+  const pad = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.25, 5.4), new THREE.MeshStandardMaterial({ color: 0x0a0722 }));
+  pad.position.y = 0.12; g.add(pad);
+  const padEdge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(5.4, 0.25, 5.4)), new THREE.LineBasicMaterial({ color: C.violet }));
+  padEdge.position.y = 0.12; g.add(padEdge);
+  const cone = new THREE.ConeGeometry(0.2, 0.7, 8), cm = new THREE.MeshBasicMaterial({ color: C.cyan });
+  [[-2.3, 2.3], [2.3, 2.3], [-2.3, -2.3], [2.3, -2.3], [0, 2.4], [-2.4, 0], [2.4, 0]].forEach(([x, z]) => { const c = new THREE.Mesh(cone, cm); c.position.set(x, 0.6, z); g.add(c); });
+  const sideTex = windowTex(idx * 31 + 5, 0.6); sideTex.repeat.set(1, 1);
+  const sideMat = new THREE.MeshStandardMaterial({ color: 0x2c2670, map: sideTex, emissive: 0xffffff, emissiveMap: sideTex, emissiveIntensity: 0.8 });
+  [[-1.75, 1.4, 1.1], [1.8, -1.3, 1.6], [1.7, 1.6, 0.9], [-1.6, -1.7, 1.3]].forEach(([x, z, h]) => {
+    const b = new THREE.Mesh(unit, sideMat); b.scale.set(1.1, h * 1.6, 1.1); b.position.set(x, 0.25 + h * 0.8, z); g.add(b);
+    const e = new THREE.LineSegments(edges, edgeMat); e.scale.copy(b.scale); e.position.copy(b.position); g.add(e);
+  });
+  // main tiers (scaled each frame from the live height)
+  const tiers = [[2.7, 0.52], [2.05, 0.3], [1.4, 0.18]].map(([wd, frac], k) => {
+    const tex = windowTex(idx * 17 + k * 3 + 1, 0.5);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x24206a, map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.95, roughness: 0.6 });
+    const m = new THREE.Mesh(unit, mat); g.add(m);
+    const e = new THREE.LineSegments(edges, edgeMat); g.add(e);
+    m.userData.tower = w.name;
+    return { m, e, wd, frac, tex, mat };
+  });
+  // crown: halo ring + spire
+  const halo = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.05, 8, 64), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  halo.rotation.x = Math.PI / 2; g.add(halo);
+  const halo2 = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.04, 8, 64), new THREE.MeshBasicMaterial({ color: C.cyan }));
+  halo2.rotation.x = Math.PI / 2; g.add(halo2);
+  const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.12, 2.6, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  g.add(spire);
+  // crosshair (shown on the top earner, like the video's starred tower)
+  const cross = new THREE.Group();
+  cross.add(new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.05, 8, 80), new THREE.MeshBasicMaterial({ color: 0xffffff })));
+  const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const hbar = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.08, 0.08), lineMat); cross.add(hbar);
+  const vbar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 6.2, 0.08), lineMat); cross.add(vbar);
+  const diamond = new THREE.Mesh(new THREE.OctahedronGeometry(0.45), new THREE.MeshBasicMaterial({ color: 0xffffff })); cross.add(diamond);
+  cross.visible = false; scene.add(cross);
+  // charge ring at the base
+  const chargeMat = new THREE.MeshBasicMaterial({ color: C.green, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+  const charge = new THREE.Mesh(new THREE.RingGeometry(2.95, 3.25, 64, 1, 0, 0.01), chargeMat);
+  charge.rotation.x = -Math.PI / 2; charge.position.y = 0.27; g.add(charge);
+  // beam (in a trade) + glow orb
+  const beamMat = new THREE.MeshBasicMaterial({ color: C.green, transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false });
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 90, 16, 1, true), beamMat);
+  g.add(beam);
+  const beamCore = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 90, 8, 1, true), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  g.add(beamCore);
+  const orb = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: C.green, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+  orb.scale.set(6, 6, 1); g.add(orb);
+  // plaque on the tower face
+  const plaqueMat = new THREE.MeshBasicMaterial({ transparent: true });
+  const plaque = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.95), plaqueMat); g.add(plaque);
+  // floating label (DOM)
+  const lbl = document.createElement('div'); lbl.className = 'lbl'; $('labels').appendChild(lbl);
+  lbl.addEventListener('click', () => openPanel(w.name));
+
+  const T = { name: w.name, g, tiers, halo, halo2, spire, cross, diamond, charge, chargeMat, beam, beamMat, beamCore, orb, plaque, plaqueMat, lbl,
+              h: 6, targetH: 8, chargeVal: 0, data: w, seenFire: w.last_fire, seenResult: w.last_result && w.last_result.t, plaqueKey: '', burst: 0 };
+  return T;
+}
+
+function setPlaque(T, w) {
+  const k = w.name + '|' + Math.round(w.all_time);
+  if (k === T.plaqueKey) return; T.plaqueKey = k;
+  if (T.plaqueMat.map) T.plaqueMat.map.dispose();
+  T.plaqueMat.map = textTex([{ text: w.name, color: '#ffffff', size: 34 }, { text: money(w.all_time), color: w.all_time >= 0 ? '#7dffbf' : '#ff7aa6', size: 44 }],
+                            { w: 512, h: 190, border: '#8a5cff', bg: 'rgba(6,4,20,.92)' });
+  T.plaqueMat.needsUpdate = true;
+}
+
+function layoutTower(T) {
+  let y = 0.25;
+  T.tiers.forEach(tr => {
+    const h = Math.max(0.6, T.h * tr.frac);
+    tr.m.scale.set(tr.wd, h, tr.wd); tr.m.position.y = y + h / 2;
+    tr.e.scale.copy(tr.m.scale); tr.e.position.copy(tr.m.position);
+    tr.tex.repeat.set(tr.wd / 1.4, h / 2.2);
+    y += h;
+  });
+  T.top = y;
+  T.halo.position.y = y + 0.35; T.halo2.position.y = y + 0.7;
+  T.spire.position.y = y + 1.3;
+  T.beam.position.y = y + 45; T.beamCore.position.y = y + 45;
+  T.orb.position.y = y + 1;
+  T.plaque.position.set(0, T.tiers[0].m.scale.y * 0.62 + 0.25, T.tiers[0].wd / 2 + 0.03);
+}
+
+function ensureSigns(workers) {
+  const strategies = [...new Set(workers.map(w => w.strategy))];
+  strategies.forEach((st, i) => {
+    if (signs.has(st)) return;
+    const [text, col] = STRAT_SIGN[st] || [st.toUpperCase(), '#5ce1ff'];
+    const tex = textTex([{ text, color: col, size: 70, glow: 22 }], { w: 640, h: 150, border: col, bg: 'rgba(6,4,20,.9)' });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(8, 1.9), new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }));
+    const n = Math.max(strategies.length, 2), a = -Math.PI * (0.92 - 0.84 * i / (n - 1));
+    const r = 25;
+    m.position.set(Math.cos(a) * r, 15 + (i % 2) * 3.5, Math.sin(a) * r);
+    m.lookAt(0, m.position.y, 6);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, m.position.y, 6), new THREE.MeshBasicMaterial({ color: 0x3a2c8a }));
+    post.position.set(m.position.x, m.position.y / 2, m.position.z);
+    scene.add(m); scene.add(post); signs.set(st, m);
+  });
+}
+
+function spawnFloater(T, text, color) {
+  const size = Math.min(60, Math.floor(1500 / Math.max(text.length, 8)));
+  const tex = textTex([{ text, color, size, glow: 20 }], { w: 1024, h: 120, bg: null });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  s.scale.set(9, 1.05, 1);
+  const stack = floaters.filter(f => f.tower === T.name && f.t < 1.2).length;
+  const p = new THREE.Vector3(0, T.top + 2.5 + stack * 1.6, 0); T.g.localToWorld(p); s.position.copy(p);
+  scene.add(s); floaters.push({ s, t: 0, life: 3.4, tower: T.name });
+}
+function burst(T, color) { T.orb.material.color.setHex(color); T.burst = 1; }
+
+// ───────────────────────── state → scene ─────────────────────────
+let state = null, focus = null, spin = true, recapShown = false;
+
+function syncTowers(ws) {
+  const names = ws.map(w => w.name).join('|');
+  if ([...towers.keys()].join('|') !== names) {
+    towers.forEach(T => { scene.remove(T.g); scene.remove(T.cross); T.lbl.remove(); });
+    towers.clear();
+    const slots = towerSlots(ws.length);
+    ws.forEach((w, i) => { const T = makeTower(w, slots[i], i); towers.set(w.name, T); });
+  }
+  ensureSigns(ws);
+  const maxAbs = Math.max(150, ...ws.map(w => Math.abs(w.all_time || 0)));
+  const topEarner = ws.reduce((a, b) => ((b.all_time || 0) > (a?.all_time ?? -Infinity) ? b : a), null);
+  ws.forEach(w => {
+    const T = towers.get(w.name); T.data = w;
+    T.targetH = 7 + 11 * Math.max(0, Math.min(1, ((w.all_time || 0) + maxAbs) / (2 * maxAbs)));
+    T.chargeVal = (w.scan?.charge || 0) / 100;
+    T.chargePut = /PUT/.test(w.scan?.label || '');
+    setPlaque(T, w);
+    const off = /off duty|stopped|halted|done|closed|sleeping|closing|outside|goal/.test(w.status);
+    T.tiers.forEach(tr => { tr.mat.emissiveIntensity = off ? 0.45 : 0.95; });
+    T.cross.visible = !!topEarner && topEarner.name === w.name && (w.all_time || 0) > 0;
+    // events: new entry → burst + FIRE text; new exit → +$/-$ text
+    if (w.last_fire && w.last_fire !== T.seenFire) {
+      T.seenFire = w.last_fire;
+      const put = w.position && w.position.kind === 'put';
+      burst(T, put ? C.pink : C.green);
+      spawnFloater(T, put ? 'FIRE ▼ PUT' : 'FIRE ▲ CALL', put ? '#ff7aa6' : '#7dffbf');
+    }
+    const rt = w.last_result && w.last_result.t;
+    if (rt && rt !== T.seenResult) {
+      T.seenResult = rt;
+      const p = w.last_result.pnl;
+      burst(T, p >= 0 ? C.gold : C.pink);
+      const why = REASON[w.last_result.reason] || '';
+      spawnFloater(T, (why ? why + ' ' : '') + money(p), p >= 0 ? '#ffd27a' : '#ff7aa6');
+    }
+    // label
+    const pos = w.position;
+    T.lbl.className = 'lbl' + (pos ? ' trade' : '') + (off ? ' off' : '') + (w.status === 'halted' ? ' halt' : '');
+    T.lbl.innerHTML = `<b>${esc(w.name)}</b><span class="st">${esc(pos ? (pos.kind === 'call' ? '▲ CALL ×' : '▼ PUT ×') + pos.qty + ' · ' + (pos.gain_pct > 0 ? '+' : '') + pos.gain_pct + '%' : w.status)}</span><br>` +
+      `earned <span class="${cls(w.all_time)}">${money(w.all_time)}</span> · today <span class="${cls(w.day_pnl)}">${money(w.day_pnl)}</span>`;
+  });
+}
+
+function render(s) {
+  state = s;
+  if (!s || !s.workers) { $('meta').textContent = 'Waiting for the bot to start…'; return; }
+  const m = $('mode'); m.textContent = s.mode;
+  m.className = 'badge ' + (/LIVE/.test(s.mode) ? 'live' : /PAPER/.test(s.mode) ? 'paper' : 'sim');
+  const upd = s.updated ? new Date(s.updated) : null;
+  $('meta').innerHTML = [`broker: ${esc(s.broker)}`, s.day ? esc(s.day) : '', upd ? 'updated ' + upd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '']
+    .filter(Boolean).map(x => `<span>${x}</span>`).join('');
+  $('chips').innerHTML = Object.entries(s.prices || {}).map(([k, v]) => `<span class="chip">${esc(k)} ${(+v).toFixed(2)}</span>`).join('');
+  const t = $('today'); t.textContent = money(s.day_total); t.className = cls(s.day_total);
+  const ageMin = upd ? (Date.now() - upd.getTime()) / 60000 : 0;
+  const nowD = new Date(), hm = nowD.getHours() * 60 + nowD.getMinutes(), wk = nowD.getDay() >= 1 && nowD.getDay() <= 5;
+  const stale = /PAPER|LIVE/.test(s.mode) && wk && hm >= 570 && hm < 960 && ageMin > 3;
+  const msg = s.halted ? '⛔ HALTED — ' + s.halted : stale ? `⚠ No update for ${Math.round(ageMin)} min — the bot is paused. Is the Mac asleep or offline?` : '';
+  $('halt').style.display = msg ? 'block' : 'none'; $('halt').textContent = msg;
+
+  syncTowers(s.workers);
+
+  // background chart: the most-watched symbol
+  const counts = {}; s.workers.forEach(w => counts[w.symbol] = (counts[w.symbol] || 0) + 1);
+  const mainSym = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+  updateChart(chartVals((s.chart || {})[mainSym]));
+
+  // vault label
+  const hist = s.history || [], st = s.stats || {};
+  const ranked = [...s.workers].sort((a, b) => (b.day_pnl || 0) - (a.day_pnl || 0));
+  const top = ranked[0];
+  const dlab = s.day ? new Date(s.day + 'T12:00:00').toLocaleDateString([], { weekday: 'short', month: 'numeric', day: 'numeric' }).toUpperCase() : 'TODAY';
+  vaultLbl.innerHTML = `<small>THE VAULT · ${esc(dlab)}</small><span class="big ${cls(s.day_total)}">${money(s.day_total)}</span>` +
+    `<span class="sub">${top && top.day_pnl > 0 ? `top worker ${esc(top.name)} ${money(top.day_pnl)} · ` : ''}all-time ${money(st.total)} · tap for payroll</span>`;
+  const maxAbsDay = Math.max(1, ...s.workers.map(w => Math.abs(w.day_pnl || 0)));
+  const tgt = +s.profit_target || 0, lim = +s.loss_limit || 0;
+  $('board').innerHTML = `<h3>TODAY'S LEADERBOARD</h3>` + ranked.map((w, i) => `
+    <div class="r" data-n="${esc(w.name)}"><span class="rk">${i + 1}</span><span class="nm">${i === 0 && w.day_pnl > 0 ? '👑 ' : ''}${esc(w.name)}</span><span class="pl ${cls(w.day_pnl)}">${money(w.day_pnl)}</span>
+    <span></span><span class="bar2"><i style="width:${Math.abs(w.day_pnl || 0) / maxAbsDay * 100}%;background:${(w.day_pnl || 0) >= 0 ? 'var(--green)' : 'var(--red)'}"></i></span></div>`).join('') +
+    `<div class="goal">${s.team_goal ? '🏁 <span class="pos">' + esc(s.team_goal) + ' — off duty</span><br>' : ''}` +
+    `${tgt ? 'team goal ' + money(tgt, false) + ' · ' : ''}${lim ? 'loss limit −$' + lim : ''}` +
+    `${tgt ? `<div class="bar" style="height:6px;margin:5px 0 0"><i style="width:${Math.max(0, Math.min(100, (s.day_total || 0) / tgt * 100))}%"></i></div>` : ''}</div>`;
+  $('board').querySelectorAll('.r').forEach(el => el.onclick = () => openPanel(el.dataset.n));
+
+  // day strip
+  const best = hist.reduce((a, b) => (b.pnl > (a?.pnl ?? -Infinity) ? b : a), null);
+  $('days').innerHTML = hist.slice(-40).map(h => {
+    const d = new Date(h.day + 'T12:00:00');
+    const lab = d.toLocaleDateString([], { weekday: 'short' }) + ' ' + (d.getMonth() + 1) + '/' + d.getDate();
+    return `<div class="day ${h.day === s.day ? 'now' : ''} ${best && h.day === best.day && h.pnl > 0 ? 'best' : ''}">${esc(lab)}<b class="${cls(h.pnl)}">${best && h.day === best.day && h.pnl > 0 ? '🔥 ' : ''}${money(h.pnl)}</b></div>`;
+  }).join('') || '<div class="day muted">no closed trades yet</div>';
+  const d = $('days'); d.scrollLeft = d.scrollWidth;
+
+  // tape
+  const items = (s.ticker || []).map(x => `<span class="${/sold -|stopped/.test(x) ? 'neg' : /sold \+/.test(x) ? 'pos' : ''}">${esc(x)}</span>`).join('');
+  const tape = $('tape'); if (tape.dataset.k !== items) { tape.dataset.k = items; tape.innerHTML = items || '<span class="muted">waiting for the first trade…</span>'; }
+
+  if (focus) openPanel(focus, true);
+}
+
+// vault label
+const vaultLbl = document.createElement('div'); vaultLbl.className = 'lbl vault'; $('labels').appendChild(vaultLbl);
+vaultLbl.addEventListener('click', openRecap);
+
+// ───────────────────────── panel (signal scanner) ─────────────────────────
+function openPanel(name, refreshOnly = false) {
+  const w = state?.workers?.find(x => x.name === name); if (!w) return;
+  focus = name;
+  const T = towers.get(name);
+  if (!refreshOnly && T) {
+    const p = T.g.position.clone();
+    const dir = new THREE.Vector3(0, 0, 14).sub(p).setY(0).normalize();
+    camTween = { pos: p.clone().add(dir.multiplyScalar(15)).add(new THREE.Vector3(0, 7 + T.top * 0.35, 0)),
+                 target: new THREE.Vector3(p.x, T.top * 0.6, p.z), t: 0 };
+    controls.autoRotate = false;
+  }
+  const pos = w.position, n = w.trades_all_time || 0;
+  $('panel').innerHTML = `
+    <h2><span>${esc(w.name)}</span><button class="x" onclick="closePanel()">✕</button></h2>
+    <div class="muted">${esc(w.symbol)} · ${esc(w.strategy)} · ${esc(w.status)}</div>
+    <div class="stats">
+      <div>today<b class="${cls(w.day_pnl)}">${money(w.day_pnl)}</b></div>
+      <div>earned<b class="${cls(w.all_time)}">${money(w.all_time)}</b></div>
+      <div>trades<b>${w.trades_today}/${w.max_trades ?? '–'}</b></div>
+      <div>win rate<b>${n ? Math.round(100 * (w.wins_all_time || 0) / n) + '%' : '—'}</b></div>
+    </div>
+    <div class="scan"><div class="t">SIGNAL SCANNER</div>${esc(w.scan.label)}
+      <div class="bar"><i style="width:${w.scan.charge}%"></i></div><span class="muted">${w.scan.charge}% CHARGED</span></div>
+    ${pos ? `<div class="posbox">${pos.kind === 'call' ? '▲ CALL' : '▼ PUT'} ×${pos.qty} ${esc(pos.contract)}<br>
+       in ${(+pos.entry).toFixed(2)} → now ${(+pos.last).toFixed(2)} <span class="${cls(pos.gain_pct)}">${pos.gain_pct > 0 ? '+' : ''}${pos.gain_pct}% (${money(pos.unrealized)})</span>
+       ${pos.trailing ? '<br><span class="win">🏄 riding the trail</span>' : ''}</div>` : ''}
+    <div class="scan"><div class="t">${esc(w.symbol)} TODAY · SIGNALS &amp; TRADES</div><canvas id="tchart"></canvas>
+      <div class="tl">${(w.today_trades || []).map(tr => `<div class="row"><span class="muted">${hhmm(tr.m)}</span>
+        <span class="${tr.kind === 'call' ? 'win' : 'loss'}">${esc(tr.why || (tr.kind === 'call' ? '▲ CALL' : '▼ PUT'))}${tr.reason ? ' <span class="muted">· ' + esc(tr.reason) + '</span>' : ''}</span>
+        <span class="${tr.pnl == null ? 'info' : cls(tr.pnl)}">${tr.pnl == null ? 'open' : money(tr.pnl)}</span></div>`).join('') || '<div class="muted" style="margin-top:6px">no trades yet today</div>'}</div>
+    </div>
+    <div class="scan thoughts"><div class="t">THOUGHTS</div>
+      ${(w.thoughts || []).map(t => `<div class="row ${esc(t.tone)}"><span class="tm">${esc(t.t)}</span>${esc(t.text)}</div>`).join('') || '<div class="muted">no thoughts yet</div>'}
+    </div>`;
+  $('panel').classList.remove('hidden');
+  drawTowerChart(w);
+}
+function drawTowerChart(w) {
+  const cv = $('tchart'); if (!cv) return;
+  const ser = ((state.chart || {})[w.symbol] || []).map(x => Array.isArray(x) ? x : null).filter(Boolean);
+  const dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr; const g = cv.getContext('2d'); g.scale(dpr, dpr);
+  g.fillStyle = '#8c84c4'; g.font = '10px JetBrains Mono, monospace';
+  if (ser.length < 2) { g.fillText('chart appears after the open', 10, 20); return; }
+  const lo = Math.min(...ser.map(p => p[1])), hi = Math.max(...ser.map(p => p[1])), span = Math.max(hi - lo, 1e-6);
+  const X = m => 6 + (W - 12) * Math.max(0, Math.min(389, m)) / 389, Y = v => 10 + (H - 24) * (1 - (v - lo) / span);
+  g.strokeStyle = '#ffffff12'; g.lineWidth = 1;
+  [0, 60, 120, 180, 240, 300, 360].forEach(m => { g.beginPath(); g.moveTo(X(m), 6); g.lineTo(X(m), H - 14); g.stroke(); g.fillText(hhmm(m), X(m) + 2, H - 3); });
+  g.strokeStyle = '#ff9f4355'; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(X(15), 6); g.lineTo(X(15), H - 14); g.stroke(); g.setLineDash([]);
+  g.strokeStyle = '#d9fff0'; g.lineWidth = 1.6; g.shadowColor = '#4dffa6'; g.shadowBlur = 6; g.beginPath();
+  ser.forEach((p, i) => i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); g.stroke(); g.shadowBlur = 0;
+  const at = m => { let best = ser[0]; for (const p of ser) if (Math.abs(p[0] - m) < Math.abs(best[0] - m)) best = p; return best[1]; };
+  (w.today_trades || []).forEach(tr => {
+    const col = tr.kind === 'call' ? '#4dffa6' : '#ff4d8a', x = X(tr.m), y = Y(at(tr.m));
+    g.fillStyle = col; g.beginPath();
+    if (tr.kind === 'call') { g.moveTo(x, y - 7); g.lineTo(x - 5, y + 2); g.lineTo(x + 5, y + 2); } else { g.moveTo(x, y + 7); g.lineTo(x - 5, y - 2); g.lineTo(x + 5, y - 2); }
+    g.fill();
+    if (tr.xm != null) {
+      const x2 = X(tr.xm), y2 = Y(at(tr.xm));
+      g.strokeStyle = col + '88'; g.setLineDash([2, 2]); g.beginPath(); g.moveTo(x, y); g.lineTo(x2, y2); g.stroke(); g.setLineDash([]);
+      g.fillStyle = tr.pnl >= 0 ? '#ffd27a' : '#ff7aa6'; g.beginPath(); g.arc(x2, y2, 3.5, 0, 7); g.fill();
+      g.font = '700 10px JetBrains Mono, monospace'; g.fillText(money(tr.pnl), Math.min(x2 + 5, W - 40), y2 - 5);
+    }
+  });
+}
+function closePanel() {
+  focus = null; $('panel').classList.add('hidden');
+  camTween = { pos: HOME.pos.clone(), target: HOME.target.clone(), t: 0 };
+  controls.autoRotate = spin;
+}
+window.closePanel = closePanel;
+
+// ───────────────────────── payroll recap ─────────────────────────
+function openRecap() {
+  if (!state) return;
+  const hist = state.history || [], st = state.stats || {};
+  const green = hist.filter(h => h.pnl > 0).length;
+  const max = Math.max(1, ...hist.map(h => Math.abs(h.pnl)));
+  const hasNeg = hist.some(h => h.pnl < 0);
+  const best = hist.reduce((a, b) => (b.pnl > (a?.pnl ?? -Infinity) ? b : a), null);
+  const bots = [...state.workers].sort((a, b) => (b.all_time || 0) - (a.all_time || 0)).slice(0, 3);
+  const medal = ['👑', '🥈', '🥉'];
+  const fmtD = d => { const x = new Date(d + 'T12:00:00'); return x.toLocaleDateString([], { weekday: 'short' }) + ' ' + (x.getMonth() + 1) + '/' + x.getDate(); };
+  $('recap').innerHTML = `<div class="card">
+    <small>${hist.length} TRADING DAY${hist.length === 1 ? '' : 'S'}</small>
+    <div class="total ${cls(st.total)}">${money(st.total)}</div>
+    <div class="sub">${hist.length} trading days · ${green} green · ${state.workers.length} workers · ${st.n || 0} trades</div>
+    <div class="bars ${hasNeg ? '' : 'allup'}">
+      ${hist.map((h, i) => `<div class="col" title="${esc(h.day)} ${money(h.pnl)}">
+          <div class="bt">${h.pnl >= 0 ? `<div class="b up" style="height:${Math.max(2, h.pnl / max * (hasNeg ? 86 : 172))}px;animation-delay:${i * 35}ms"></div>` : ''}</div>
+          <div class="bb">${h.pnl < 0 ? `<div class="b dn" style="height:${Math.max(2, -h.pnl / max * 86)}px;animation-delay:${i * 35}ms"></div>` : ''}</div>
+        </div>`).join('')}
+    </div>
+    <div class="xl"><span>${hist[0] ? fmtD(hist[0].day) : ''}</span><span>${hist.length ? fmtD(hist[hist.length - 1].day) : ''}</span></div>
+    ${best && best.pnl > 0 ? `<div class="best">🔥 BEST DAY ${money(best.pnl)} · ${fmtD(best.day)}</div>` : ''}
+    <div class="medals">${bots.map((b, i) => `<span>${medal[i]} ${esc(b.name)} <span class="${cls(b.all_time)}">${money(b.all_time)}</span></span>`).join('')}</div>
+    <div class="btns"><button id="rpl">↻ REPLAY</button><button id="rcl">CLOSE</button></div>
+  </div>`;
+  $('recap').classList.remove('hidden');
+  $('rcl').onclick = () => $('recap').classList.add('hidden');
+  $('rpl').onclick = openRecap;
+}
+$('recap').addEventListener('click', e => { if (e.target.id === 'recap') $('recap').classList.add('hidden'); });
+$('btnRecap').onclick = openRecap;
+$('btnSpin').onclick = () => { spin = !spin; controls.autoRotate = spin && !focus; $('btnSpin').textContent = 'SPIN: ' + (spin ? 'ON' : 'OFF'); };
+addEventListener('keydown', e => { if (e.key === 'Escape') { $('recap').classList.add('hidden'); if (focus) closePanel(); } });
+
+// ───────────────────────── picking ─────────────────────────
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { downAt = [e.clientX, e.clientY]; controls.autoRotate = false; });
+renderer.domElement.addEventListener('pointerup', e => {
+  controls.autoRotate = spin && !focus;
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return;
+  mouse.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(mouse, camera);
+  const targets = [...vault.userData.pick];
+  towers.forEach(T => T.tiers.forEach(tr => targets.push(tr.m)));
+  const hit = ray.intersectObjects(targets, false)[0];
+  if (!hit) return;
+  if (hit.object.userData.tower) openPanel(hit.object.userData.tower);
+  else openRecap();
+});
+
+// ───────────────────────── animation loop ─────────────────────────
+let camTween = null;
+const clock = new THREE.Clock();
+const tmp = new THREE.Vector3();
+function placeLabel(el, world, dy = 0) {
+  tmp.copy(world).project(camera);
+  if (tmp.z > 1 || tmp.x < -1.2 || tmp.x > 1.2) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.style.left = ((tmp.x + 1) / 2 * innerWidth) + 'px';
+  el.style.top = ((1 - tmp.y) / 2 * innerHeight + dy) + 'px';
+}
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  if (camTween) {
+    camTween.t = Math.min(1, camTween.t + dt * 1.2);
+    const k = 1 - Math.pow(1 - camTween.t, 3);
+    camera.position.lerp(camTween.pos, k * 0.15 + 0.02);
+    controls.target.lerp(camTween.target, k * 0.15 + 0.02);
+    if (camTween.t >= 1 && camera.position.distanceTo(camTween.pos) < 0.2) camTween = null;
+  }
+  controls.update();
+  lightRing.rotation.y += dt * 0.12;
+  vault.userData.halo.material.opacity = 0.14 + Math.sin(t * 1.6) * 0.05;
+
+  towers.forEach(T => {
+    T.h += (T.targetH - T.h) * Math.min(1, dt * 2);
+    layoutTower(T);
+    T.halo.rotation.z += dt * 0.8; T.halo2.rotation.z -= dt * 1.2;
+    const w = T.data, pos = w.position;
+    // beam while in a trade
+    const want = pos ? 0.55 + Math.sin(t * 4) * 0.12 : 0;
+    T.beamMat.color.setHex(pos && pos.kind === 'put' ? C.pink : C.green);
+    T.beamMat.opacity += (want - T.beamMat.opacity) * Math.min(1, dt * 4);
+    T.beamCore.material.opacity = T.beamMat.opacity * 1.2;
+    T.beam.visible = T.beamCore.visible = T.beamMat.opacity > 0.01;
+    // burst orb
+    if (T.burst > 0) { T.burst = Math.max(0, T.burst - dt * 0.45); const s = 4 + (1 - T.burst) * 9; T.orb.scale.set(s, s, 1); T.orb.material.opacity = T.burst; }
+    else if (pos) { T.orb.material.color.setHex(pos.kind === 'put' ? C.pink : C.green); T.orb.material.opacity = 0.35 + Math.sin(t * 3) * 0.1; T.orb.scale.set(4, 4, 1); }
+    else T.orb.material.opacity = 0;
+    // charge ring
+    const cv = Math.max(0.01, T.chargeVal);
+    if (Math.abs((T.charge.userData.v || 0) - cv) > 0.005) {
+      T.charge.userData.v = cv; T.charge.geometry.dispose();
+      T.charge.geometry = new THREE.RingGeometry(2.95, 3.25, 64, 1, Math.PI / 2, cv * Math.PI * 2);
+    }
+    T.chargeMat.opacity = 0.55 + (cv > 0.85 ? Math.sin(t * 8) * 0.35 : 0);
+    T.chargeMat.color.setHex(T.chargePut ? C.pink : C.green);
+    // a faint "building" beam once a signal is >70% charged (green = call building, red = put building)
+    if (!pos && cv > 0.7) { T.beamMat.color.setHex(T.chargePut ? C.pink : C.green); T.beamMat.opacity = Math.max(T.beamMat.opacity, (cv - 0.7) * 0.6); T.beam.visible = true; }
+    // crosshair floats above the top earner, facing the camera
+    if (T.cross.visible) {
+      const p = new THREE.Vector3(0, T.top + 4.2, 0); T.g.localToWorld(p); T.cross.position.copy(p);
+      T.cross.lookAt(camera.position); T.diamond.rotation.z += dt;
+    }
+    const lp = new THREE.Vector3(0, T.top + 2.4, 0); T.g.localToWorld(lp); placeLabel(T.lbl, lp);
+  });
+  placeLabel(vaultLbl, new THREE.Vector3(vault.position.x, vault.position.y + 6.2, vault.position.z));
+
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    const f = floaters[i]; f.t += dt;
+    f.s.position.y += dt * 1.6; f.s.material.opacity = Math.max(0, 1 - f.t / f.life);
+    if (f.t > f.life) { scene.remove(f.s); f.s.material.map.dispose(); f.s.material.dispose(); floaters.splice(i, 1); }
+  }
+  if (composer) composer.render(); else renderer.render(scene, camera);
+}
+animate();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  fitHome(); if (!focus) camTween = { pos: HOME.pos.clone(), target: HOME.target.clone(), t: 0 };
+  renderer.setSize(innerWidth, innerHeight);
+  if (composer) { composer.setSize(innerWidth, innerHeight); bloom.setSize(innerWidth, innerHeight); }
+});
+
+// ───────────────────────── polling ─────────────────────────
+async function poll() {
+  try { const r = await fetch('state.json?_=' + Date.now()); render(await r.json()); }
+  catch (e) { $('meta').textContent = 'Bot not running — start it with python run.py …'; }
+}
+poll(); setInterval(poll, 1000);
+</script>
+</body>
+</html>
